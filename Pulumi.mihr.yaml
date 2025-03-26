@@ -1,0 +1,5 @@
+config:
+  aws:region: us-east-1
+  lab-100938484:errorDocument: error.html
+  lab-100938484:indexDocument: index.html
+  lab-100938484:path: ./www
