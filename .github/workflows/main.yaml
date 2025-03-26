@@ -17,9 +17,10 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '16'
-
+          
       - name: Install Pulumi
-        uses: pulumi/actions-install-pulumi-cli@v3
+        if: env.changed == 'true'
+        uses: pulumi/actions-cli-action@v3
         with:
           pulumi-version: latest
 
