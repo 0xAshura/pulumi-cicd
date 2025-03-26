@@ -7,42 +7,47 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # Use an Ubuntu runner
 
     steps:
     # Step 1: Checkout the repository
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # Step 2: Install Pulumi CLI
+    # Step 2: Set up Node.js
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'  # Set the required node version for your Pulumi program
+
+    # Step 3: Install Pulumi CLI
     - name: Install Pulumi CLI
-      if: env.changed == 'true'
       run: |
         curl -fsSL https://get.pulumi.com | sh
         export PATH=$HOME/.pulumi/bin:$PATH
 
-    # Step 3: Install dependencies
+    # Step 4: Install dependencies
     - name: Install dependencies
-      if: env.changed == 'true'
-      run: npm install
+      run: |
+        npm install
 
-    # Step 4: Configure AWS credentials
+    # Step 5: Configure AWS credentials
     - name: Configure AWS credentials
-      if: env.changed == 'true'
       uses: aws-actions/configure-aws-credentials@v3
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1  # Replace with your AWS region
+        aws-region: us-east-1  # Replace with your AWS region if necessary
 
-    # Step 5: Run Pulumi deployment (only if YAML changed)
-    - name: Pulumi up
-      if: env.changed == 'true'
-      env:
-        PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-      run: pulumi up --yes
+    # Step 6: Run Pulumi to deploy infrastructure
+    - name: Run Pulumi up
+      run: |
+        pulumi login  # Log in to Pulumi
+        pulumi stack select your-stack-name  # Replace with your Pulumi stack name
+        pulumi up --yes  # Run Pulumi to deploy resources
 
-    # Step 6: Skip deployment message
-    - name: No changes detected
-      if: env.changed == 'false'
-      run: echo "No changes detected in Pulumi.yaml. Skipping deployment."
+    # Step 7: Output the URLs for the S3 bucket and CloudFront distribution
+    - name: Output URLs
+      run: |
+        echo "S3 Bucket URL: ${{ steps.s3-output.outputs.bucket-url }}"
+        echo "CloudFront URL: ${{ steps.cloudfront-output.outputs.cloudfront-url }}"
