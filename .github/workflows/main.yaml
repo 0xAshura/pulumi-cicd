@@ -1,40 +1,103 @@
-name: Pulumi Deployment
+name: mylab8project
+description: this is my lab08 project
+runtime: yaml
+# Import the program's configuration settings.
+config:
+  path:
+    type: string
+    default: ./www
+  indexDocument:
+    type: string
+    default: index.html
+  errorDocument:
+    type: string
+    default: error.html
+  pulumi:tags:
+    value:
+      pulumi:template: static-website-aws-yaml
+resources:
+  # Create an S3 bucket and configure it as a website.
+  bucket:
+    type: aws:s3:BucketV2
+  bucketWebsite:
+    properties:
+      bucket: ${bucket.bucket}
+      errorDocument:
+        suffix: ${errorDocument}
+      indexDocument:
+        key: ${indexDocument}
+    type: aws:s3:BucketWebsiteConfigurationV2
+  # Assign ownership controls to the new S3 bucket
+  ownership-controls:
+    properties:
+      bucket: ${bucket.id}
+      rule:
+        objectOwnership: ObjectWriter
+    type: aws:s3:BucketOwnershipControls
+  # Configure the public access block for the new S3 bucket
+  public-access-block:
+    properties:
+      bucket: ${bucket.id}
+      blockPublicAcls: false
+    type: aws:s3:BucketPublicAccessBlock
+  # Use a synced folder to manage the files of the website.
+  bucket-folder:
+    options:
+      dependsOn:
+        - ${ownership-controls}
+        - ${public-access-block}
+    properties:
+      acl: public-read
+      bucketName: ${bucket.bucket}
+      path: ${path}
+    type: synced-folder:index:S3BucketFolder
+  # Create a CloudFront CDN to distribute and cache the website.
+  cdn:
+    type: aws:cloudfront:Distribution
+    properties:
+      enabled: true
+      origins:
+        - originId: ${bucket.arn}
+          domainName: ${bucketWebsite.websiteEndpoint}
+          customOriginConfig:
+            originProtocolPolicy: http-only
+            httpPort: 80
+            httpsPort: 443
+            originSslProtocols:
+              - TLSv1.2
+      defaultCacheBehavior:
+        targetOriginId: ${bucket.arn}
+        viewerProtocolPolicy: redirect-to-https
+        allowedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+        cachedMethods:
+          - GET
+          - HEAD
+          - OPTIONS
+        compress: true
+        defaultTtl: 600
+        maxTtl: 600
+        minTtl: 600
+        forwardedValues:
+          queryString: true
+          cookies:
+            forward: all
+      priceClass: PriceClass_100
+      customErrorResponses:
+        - errorCode: 404
+          responseCode: 404
+          responsePagePath: /${errorDocument}
+      restrictions:
+        geoRestriction:
+          restrictionType: none
+      viewerCertificate:
+        cloudfrontDefaultCertificate: true
+# Export the URLs and hostnames of the bucket and distribution.
+outputs:
+  originURL: http://${bucketWebsite.websiteEndpoint}
+  originHostname: ${bucketWebsite.websiteEndpoint}
+  cdnURL: https://${cdn.domainName}
+  cdnHostname: ${cdn.domainName}
 
-on:
-  push:
-    branches:
-      - main  # Runs when code is pushed to 'main'
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-          
-      - name: Install Pulumi
-        if: env.changed == 'true'
-        uses: pulumi/actions-cli-action@v3
-        with:
-          pulumi-version: latest
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v3
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Pulumi up
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-        run: pulumi up --yes
